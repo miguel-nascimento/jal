@@ -9,5 +9,10 @@ data Expr
   | Lamb Name Expr
   | App Expr Expr
   | Lit Literal
+  deriving (Show)
 
-data Literal = LStr Text | LInt Integer
+data Literal
+  = LStr Text
+  | LInt Integer
+  | LBool Bool
+  deriving (Show)
