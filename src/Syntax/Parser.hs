@@ -1,12 +1,12 @@
 module Syntax.Parser where
 
 import Data.Functor (($>))
-import Data.Text as T
+import qualified Data.Text as T
 import Data.Void
 import Syntax.Ast
 import Text.Megaparsec
 import Text.Megaparsec.Char
-import Text.Megaparsec.Char.Lexer as L
+import qualified Text.Megaparsec.Char.Lexer as L
 
 type Parser = Parsec Void String
 
@@ -17,8 +17,14 @@ pSpace =
     (L.skipLineComment "//")
     (L.skipBlockComment "/*" "*/")
 
-pIdentifier :: Parser String
-pIdentifier = some letterChar
+symbol :: String -> Parser String
+symbol = L.symbol pSpace
+
+parens :: Parser a -> Parser a
+parens = between (symbol "(") (symbol ")")
+
+pIdentifier :: Parser Identifier
+pIdentifier = some letterChar <|> some (char '_')
 
 pString :: Parser String
 pString =
@@ -28,13 +34,24 @@ pString =
     (many $ noneOf "\"")
 
 pInteger :: Parser Integer
-pInteger = L.signed (return ()) L.decimal
+pInteger = L.signed (pure ()) L.decimal
 
 pBool :: Parser Bool
 pBool = pTrue <|> pFalse
   where
     pTrue = string "true" $> True
     pFalse = string "false" $> False
+
+pVar :: Parser Expr
+pVar = Var <$> pIdentifier
+
+pFunction :: Parser Expr
+pFunction =
+  string "let" *> pSpace *> do
+    name <- pIdentifier <* pSpace
+    args <- some pIdentifier <|> pure [] -- TODO: why `let fun x y = ..` is not working?
+    body <- pSpace *> symbol "=" *> pSpace *> pExpr
+    pure $ Fn name args body
 
 pLiteral :: Parser Literal
 pLiteral =
@@ -43,3 +60,46 @@ pLiteral =
       pInteger >>= \i -> pure $ LInt i,
       pBool >>= \b -> pure $ LBool b
     ]
+
+pLamb :: Parser Expr
+pLamb =
+  string "\\" *> pSpace *> do
+    args <- pIdentifier
+    body <- pSpace *> string "->" *> pSpace *> pExpr
+    pure $ Lamb args body
+
+pOpApp :: Parser Expr
+pOpApp = do
+  expr1 <- pLamb <|> pVar <|> pFunction <|> Lit <$> pLiteral
+  pSpace
+  op <- pOp
+  pSpace
+  expr2 <- pLamb <|> pVar <|> pFunction <|> Lit <$> pLiteral
+  pure $ OpApp op expr1 expr2
+
+pOp :: Parser Op
+pOp =
+  choice
+    [ string "+" $> Add,
+      string "-" $> Sub,
+      string "*" $> Mul,
+      string "/" $> Div,
+      string "==" $> Eq,
+      string "!=" $> Neq,
+      string "<" $> Lt,
+      string ">" $> Gt,
+      string "<=" $> Le,
+      string ">=" $> Ge
+    ]
+
+pExpr :: Parser Expr
+pExpr =
+  pSpace
+    *> choice
+      [ pFunction,
+        pLamb,
+        try pOpApp,
+        pVar,
+        Op <$> pOp,
+        Lit <$> pLiteral
+      ]
