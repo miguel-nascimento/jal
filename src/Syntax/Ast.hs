@@ -10,7 +10,6 @@ data Expr
   | Lamb Identifier Expr
   | App Expr Expr
   | OpApp Op Expr Expr
-  | Op Op
   | Lit Literal
   deriving (Show)
 

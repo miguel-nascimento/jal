@@ -24,7 +24,7 @@ parens :: Parser a -> Parser a
 parens = between (symbol "(") (symbol ")")
 
 pIdentifier :: Parser Identifier
-pIdentifier = some letterChar <|> some (char '_')
+pIdentifier = some (letterChar <|> char '_')
 
 pString :: Parser String
 pString =
@@ -76,21 +76,27 @@ pOpApp = do
   pSpace
   expr2 <- pLamb <|> pVar <|> pFunction <|> Lit <$> pLiteral
   pure $ OpApp op expr1 expr2
+  where
+    pOp =
+      choice
+        [ string "+" $> Add,
+          string "-" $> Sub,
+          string "*" $> Mul,
+          string "/" $> Div,
+          string "==" $> Eq,
+          string "!=" $> Neq,
+          string "<" $> Lt,
+          string ">" $> Gt,
+          string "<=" $> Le,
+          string ">=" $> Ge
+        ]
 
-pOp :: Parser Op
-pOp =
-  choice
-    [ string "+" $> Add,
-      string "-" $> Sub,
-      string "*" $> Mul,
-      string "/" $> Div,
-      string "==" $> Eq,
-      string "!=" $> Neq,
-      string "<" $> Lt,
-      string ">" $> Gt,
-      string "<=" $> Le,
-      string ">=" $> Ge
-    ]
+pApp :: Parser Expr
+pApp = do
+  expr1 <- pLamb <|> pVar <|> pFunction <|> Lit <$> pLiteral
+  pSpace
+  expr2 <- pLamb <|> pVar <|> pFunction <|> Lit <$> pLiteral
+  pure $ App expr1 expr2
 
 pExpr :: Parser Expr
 pExpr =
@@ -98,8 +104,8 @@ pExpr =
     *> choice
       [ pFunction,
         pLamb,
+        pApp,
         try pOpApp,
         pVar,
-        Op <$> pOp,
         Lit <$> pLiteral
       ]
