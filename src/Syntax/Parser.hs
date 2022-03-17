@@ -14,8 +14,8 @@ pSpace :: Parser ()
 pSpace =
   L.space
     space1
-    (L.skipLineComment "//")
-    (L.skipBlockComment "/*" "*/")
+    (L.skipLineComment "--")
+    (L.skipBlockComment "{--" "--}")
 
 symbol :: String -> Parser String
 symbol = L.symbol pSpace
@@ -24,20 +24,21 @@ parens :: Parser a -> Parser a
 parens = between (symbol "(") (symbol ")")
 
 pIdentifier :: Parser Identifier
-pIdentifier = some (letterChar <|> char '_')
+pIdentifier = label "identifier" $ some (letterChar <|> char '_')
 
 pString :: Parser String
 pString =
-  between
-    (char '"')
-    (char '"')
-    (many $ noneOf "\"")
+  label "string" $
+    between
+      (char '"')
+      (char '"')
+      (many $ noneOf "\"")
 
 pInteger :: Parser Integer
-pInteger = L.signed (pure ()) L.decimal
+pInteger = label "integer" $ L.signed (pure ()) L.decimal
 
 pBool :: Parser Bool
-pBool = pTrue <|> pFalse
+pBool = label "bool" $ pTrue <|> pFalse
   where
     pTrue = string "true" $> True
     pFalse = string "false" $> False
@@ -47,11 +48,15 @@ pVar = Var <$> pIdentifier
 
 pFunction :: Parser Expr
 pFunction =
-  string "let" *> pSpace *> do
-    name <- pIdentifier <* pSpace
-    args <- some pIdentifier <|> pure [] -- TODO: why `let fun x y = ..` is not working?
-    body <- pSpace *> symbol "=" *> pSpace *> pExpr
-    pure $ Fn name args body
+  label "function" $
+    string "let" *> do
+      pSpace
+      name <- pIdentifier
+      pSpace
+      args <- parens (pIdentifier `sepBy` pSpace) <|> pure []
+      pSpace
+      body <- string "=" *> pSpace *> pExpr
+      pure $ Fn name args body
 
 pLiteral :: Parser Literal
 pLiteral =
@@ -63,20 +68,22 @@ pLiteral =
 
 pLamb :: Parser Expr
 pLamb =
-  string "\\" *> pSpace *> do
-    args <- pIdentifier
-    body <- pSpace *> string "->" *> pSpace *> pExpr
-    pure $ Lamb args body
+  label "lambda" $
+    string "\\" *> pSpace *> do
+      args <- pIdentifier
+      body <- pSpace *> string "->" *> pSpace *> pExpr
+      pure $ Lamb args body
 
 pOpApp :: Parser Expr
 pOpApp = do
-  expr1 <- pLamb <|> pVar <|> pFunction <|> Lit <$> pLiteral
+  expr1 <- pExprWithoutOp
   pSpace
   op <- pOp
   pSpace
-  expr2 <- pLamb <|> pVar <|> pFunction <|> Lit <$> pLiteral
+  expr2 <- pExprWithoutOp
   pure $ OpApp op expr1 expr2
   where
+    pExprWithoutOp = choice [pLamb, pVar, pFunction, Lit <$> pLiteral]
     pOp =
       choice
         [ string "+" $> Add,
@@ -91,21 +98,33 @@ pOpApp = do
           string ">=" $> Ge
         ]
 
-pApp :: Parser Expr
-pApp = do
-  expr1 <- pLamb <|> pVar <|> pFunction <|> Lit <$> pLiteral
-  pSpace
-  expr2 <- pLamb <|> pVar <|> pFunction <|> Lit <$> pLiteral
-  pure $ App expr1 expr2
+-- TODO: handle later tehe
+-- pApp :: Parser Expr
+-- pApp = normalParsing <|> parens normalParsing
+--   where
+--     normalParsing = do
+--       expr1 <- try pExpr
+--       pSpace
+--       expr2 <- pExpr
+--       pure $ App expr1 expr2
 
 pExpr :: Parser Expr
 pExpr =
-  pSpace
-    *> choice
-      [ pFunction,
-        pLamb,
-        pApp,
-        try pOpApp,
-        pVar,
-        Lit <$> pLiteral
-      ]
+  choice
+    [ pFunction,
+      pLamb,
+      try pOpApp,
+      pVar,
+      Lit <$> pLiteral
+    ]
+
+parseFile :: String -> String -> Either String [Expr]
+parseFile input filename =
+  let outputE =
+        parse
+          (between pSpace eof (pExpr `sepBy` pSpace)) -- TODO: still need to handle eof orz
+          filename
+          input
+   in case outputE of
+        Left err -> Left $ errorBundlePretty err
+        Right output -> Right output

@@ -1,5 +1,7 @@
 # JAL: Just Another Language
 
+Want to see more about the Untyped Syntax? [Click here](test/untyped.al)
+
 - [ ] Parser
 - [ ] Interpreter
 - [ ] Support for explicit types

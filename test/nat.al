@@ -5,7 +5,7 @@ module sig Nat
 end 
 
 module Nat impl
-  let double n = 
+  let double n =
     match n with 
       | Z -> Z
       | S x -> S (S (double x))
