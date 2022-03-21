@@ -22,5 +22,5 @@ eval ctx (App expr1 expr2) =
         VLit lit -> VLit lit
         VUnit -> VUnit
 eval ctx (Lit lit) = VLit lit
-eval ctx (Fn name args body) = _
-eval ctx (InfixApp op expr1 expr2) = _
+eval ctx (Fn name args body) = undefined
+eval ctx (InfixApp op expr1 expr2) = undefined

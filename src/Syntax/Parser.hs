@@ -22,6 +22,9 @@ symbol = L.symbol spaceConsumer
 parens :: Parser a -> Parser a
 parens = between (symbol "(") (symbol ")")
 
+semicolon :: Parser String
+semicolon = symbol ";"
+
 pIdentifier :: Parser Identifier
 pIdentifier = lexeme $
   label "identifier" $ do
@@ -123,7 +126,7 @@ pAExpr :: Parser Expr
 pAExpr = label "expression in parens or var/literal" $ choice [parens pExpr, pVar, Lit <$> pLiteral]
 
 pStatement :: Parser Expr
-pStatement = pExpr <* symbol ";"
+pStatement = pExpr <* semicolon
 
 parseFile :: String -> String -> Either String [Expr]
 parseFile input filename =
