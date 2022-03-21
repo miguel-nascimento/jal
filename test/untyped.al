@@ -1,5 +1,7 @@
-let lambda_sum = \x -> let _ (y) = x + y
-let sum (x y) = x + y
+let apply_twice f x = f (f x);
+let whati'mdoing = id (sum (sum (x + (y - 1))));
 
-let first (x y) = x
-let snd   (x y) = y
+let sum x y = x + y;
+
+let fst x y = x x z;
+let snd x y = y;

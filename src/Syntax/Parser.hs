@@ -10,21 +10,24 @@ import qualified Text.Megaparsec.Char.Lexer as L
 
 type Parser = Parsec Void String
 
-pSpace :: Parser ()
-pSpace =
-  L.space
-    space1
-    (L.skipLineComment "--")
-    (L.skipBlockComment "{--" "--}")
+spaceConsumer :: Parser ()
+spaceConsumer = L.space space1 (L.skipLineComment "--") empty
+
+lexeme :: Parser a -> Parser a
+lexeme = L.lexeme spaceConsumer
 
 symbol :: String -> Parser String
-symbol = L.symbol pSpace
+symbol = L.symbol spaceConsumer
 
 parens :: Parser a -> Parser a
 parens = between (symbol "(") (symbol ")")
 
 pIdentifier :: Parser Identifier
-pIdentifier = label "identifier" $ some (letterChar <|> char '_')
+pIdentifier = lexeme $
+  label "identifier" $ do
+    first <- letterChar
+    rest <- many $ alphaNumChar <|> char '_' <|> char '\''
+    pure (first : rest)
 
 pString :: Parser String
 pString =
@@ -43,88 +46,100 @@ pBool = label "bool" $ pTrue <|> pFalse
     pTrue = string "true" $> True
     pFalse = string "false" $> False
 
+pLiteral :: Parser Literal
+pLiteral =
+  lexeme $
+    choice
+      [ pString >>= \s -> pure $ LStr (T.pack s),
+        pInteger >>= \i -> pure $ LInt i,
+        pBool >>= \b -> pure $ LBool b
+      ]
+
 pVar :: Parser Expr
 pVar = Var <$> pIdentifier
 
-pFunction :: Parser Expr
-pFunction =
-  label "function" $
-    string "let" *> do
-      pSpace
-      name <- pIdentifier
-      pSpace
-      args <- parens (pIdentifier `sepBy` pSpace) <|> pure []
-      pSpace
-      body <- string "=" *> pSpace *> pExpr
-      pure $ Fn name args body
-
-pLiteral :: Parser Literal
-pLiteral =
-  choice
-    [ pString >>= \s -> pure $ LStr (T.pack s),
-      pInteger >>= \i -> pure $ LInt i,
-      pBool >>= \b -> pure $ LBool b
-    ]
+pLetFn :: Parser Expr
+pLetFn =
+  label "function" $ do
+    symbol "let"
+    spaceConsumer
+    name <- pIdentifier
+    spaceConsumer
+    args <- try $ many pIdentifier
+    spaceConsumer
+    symbol "="
+    spaceConsumer
+    Fn name args <$> pExpr
 
 pLamb :: Parser Expr
 pLamb =
   label "lambda" $
-    string "\\" *> pSpace *> do
+    string "\\" *> spaceConsumer *> do
       args <- pIdentifier
-      body <- pSpace *> string "->" *> pSpace *> pExpr
-      pure $ Lamb args body
+      spaceConsumer
+      string "->"
+      spaceConsumer
+      Lamb args <$> pExpr
 
-pOpApp :: Parser Expr
-pOpApp = do
-  expr1 <- pExprWithoutOp
-  pSpace
-  op <- pOp
-  pSpace
-  expr2 <- pExprWithoutOp
-  pure $ OpApp op expr1 expr2
-  where
-    pExprWithoutOp = choice [pLamb, pVar, pFunction, Lit <$> pLiteral]
-    pOp =
-      choice
-        [ string "+" $> Add,
-          string "-" $> Sub,
-          string "*" $> Mul,
-          string "/" $> Div,
-          string "==" $> Eq,
-          string "!=" $> Neq,
-          string "<" $> Lt,
-          string ">" $> Gt,
-          string "<=" $> Le,
-          string ">=" $> Ge
-        ]
+pInfixApp :: Parser Expr
+pInfixApp = label "infix application" $ do
+  expr1 <- pAExpr
+  op <- label "operators" $ choice operators
+  InfixApp op expr1 <$> pAExpr
 
--- TODO: handle later tehe
--- pApp :: Parser Expr
--- pApp = normalParsing <|> parens normalParsing
---   where
---     normalParsing = do
---       expr1 <- try pExpr
---       pSpace
---       expr2 <- pExpr
---       pure $ App expr1 expr2
+operators :: [Parser Op]
+operators =
+  [ symbol "+" $> Add,
+    symbol "-" $> Sub,
+    symbol "*" $> Mul,
+    symbol "/" $> Div,
+    symbol "==" $> Eq,
+    symbol "!=" $> Neq,
+    symbol "<" $> Lt,
+    symbol ">" $> Gt,
+    symbol "<=" $> Le,
+    symbol ">=" $> Ge
+  ]
+
+pApp :: Parser Expr
+pApp =
+  label "function application" $ do
+    expr1 <- pAExpr
+    args <- many pAExpr
+    pure $ foldl App expr1 args
 
 pExpr :: Parser Expr
 pExpr =
-  choice
-    [ pFunction,
-      pLamb,
-      try pOpApp,
-      pVar,
-      Lit <$> pLiteral
-    ]
+  label "expression" $
+    choice
+      [ pLetFn,
+        pLamb,
+        try pInfixApp,
+        try pApp,
+        pAExpr
+      ]
+
+pAExpr :: Parser Expr
+pAExpr = label "expression in parens or var/literal" $ choice [parens pExpr, pVar, Lit <$> pLiteral]
+
+pStatement :: Parser Expr
+pStatement = pExpr <* symbol ";"
 
 parseFile :: String -> String -> Either String [Expr]
 parseFile input filename =
   let outputE =
         parse
-          (between pSpace eof (pExpr `sepBy` pSpace)) -- TODO: still need to handle eof orz
+          (between spaceConsumer eof (many pStatement))
           filename
           input
    in case outputE of
         Left err -> Left $ errorBundlePretty err
         Right output -> Right output
+
+test :: FilePath -> IO ()
+test fileName = do
+  fileContent <- readFile fileName
+  let ast = parseFile fileContent fileName
+  case ast of
+    Left err -> putStrLn err
+    Right ast' -> print ast'

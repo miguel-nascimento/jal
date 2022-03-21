@@ -9,7 +9,7 @@ data Expr
   | Fn Identifier [Identifier] Expr
   | Lamb Identifier Expr
   | App Expr Expr
-  | OpApp Op Expr Expr
+  | InfixApp Op Expr Expr
   | Lit Literal
   deriving (Show)
 
