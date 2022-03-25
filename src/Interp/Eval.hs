@@ -1,26 +1,34 @@
 module Interp.Eval where
 
 import qualified Data.Map as Map
+import Data.Text (Text)
 import Syntax.Ast
 
 data Value
   = VLit Literal
-  | VClosure Identifier Expr Context
+  | VClosure Identifier Expr Env
   | VUnit
   deriving (Show)
 
-type Context = Map.Map Identifier Value
+data EvalError = VariableNotInScope Text | TypeMismatch Text Text
+  deriving (Show)
 
-eval :: Context -> Expr -> Value
-eval ctx (Var name) = ctx Map.! name
-eval ctx (Lamb arg body) = VClosure arg body ctx
-eval ctx (App expr1 expr2) =
-  let r = eval ctx expr1
-      r' = eval ctx expr2
-   in case r of
-        VClosure arg body ctx' -> eval (Map.insert arg r' ctx') body
-        VLit lit -> VLit lit
-        VUnit -> VUnit
-eval ctx (Lit lit) = VLit lit
-eval ctx (Fn name args body) = undefined
-eval ctx (InfixApp op expr1 expr2) = undefined
+type Env = Map.Map Identifier Value
+
+-- data St' = St'
+--   { env :: Env
+--   }
+
+-- type Eval = ExceptT EvalError (State St') Value
+
+eval :: [Expr] -> Env -> [Value]
+eval [] env = [VUnit]
+eval (x : xs) env = case x of
+  Var name -> env Map.! name : eval xs env
+  Fn name args body ->
+    let env' = Map.insert name (VClosure name body env) env
+     in eval (body : xs) env'
+  Lamb arg body -> _
+  App expr1 expr2 -> _
+  InfixApp op expr1 expr2 -> _
+  Lit lit -> VLit lit : eval xs env

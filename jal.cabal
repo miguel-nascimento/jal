@@ -28,7 +28,10 @@ executable jal
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
-    build-depends:    base ^>=4.14.3.0 , jal , megaparsec
+    build-depends:  base ^>=4.14.3.0 
+                    , jal
+                    , megaparsec
+                    , text
     hs-source-dirs:   app
     default-language: Haskell2010
 
@@ -37,6 +40,7 @@ library
                   , text
                   , megaparsec
                   , containers
+                  , mtl
 
   hs-source-dirs:      src
   default-language:    Haskell2010
