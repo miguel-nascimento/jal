@@ -1,14 +1,17 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Syntax.Parser where
 
 import Data.Functor (($>))
+import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Void
+import Data.Void (Void)
 import Syntax.Ast
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
 
-type Parser = Parsec Void String
+type Parser = Parsec Void Text
 
 spaceConsumer :: Parser ()
 spaceConsumer = L.space space1 (L.skipLineComment "--") empty
@@ -16,29 +19,30 @@ spaceConsumer = L.space space1 (L.skipLineComment "--") empty
 lexeme :: Parser a -> Parser a
 lexeme = L.lexeme spaceConsumer
 
-symbol :: String -> Parser String
+symbol :: Text -> Parser Text
 symbol = L.symbol spaceConsumer
 
 parens :: Parser a -> Parser a
 parens = between (symbol "(") (symbol ")")
 
-semicolon :: Parser String
+semicolon :: Parser Text
 semicolon = symbol ";"
 
-pIdentifier :: Parser Identifier
-pIdentifier = lexeme $
-  label "identifier" $ do
-    first <- letterChar
-    rest <- many $ alphaNumChar <|> char '_' <|> char '\''
-    pure (first : rest)
+pIdentifier :: Parser Text
+pIdentifier =
+  lexeme $
+    label "identifier" $ do
+      first <- letterChar
+      rest <- many (alphaNumChar <|> char '_')
+      pure $ T.pack (first : rest)
 
-pString :: Parser String
+pString :: Parser Text
 pString =
-  label "string" $
-    between
-      (char '"')
-      (char '"')
-      (many $ noneOf "\"")
+  label "string" $ do
+    char '"'
+    content <- many $ noneOf ("\"" :: String)
+    char '"'
+    pure $ T.pack content
 
 pInteger :: Parser Integer
 pInteger = label "integer" $ L.signed (pure ()) L.decimal
@@ -53,7 +57,7 @@ pLiteral :: Parser Literal
 pLiteral =
   lexeme $
     choice
-      [ pString >>= \s -> pure $ LStr (T.pack s),
+      [ pString >>= \s -> pure $ LStr s,
         pInteger >>= \i -> pure $ LInt i,
         pBool >>= \b -> pure $ LBool b
       ]
@@ -78,11 +82,11 @@ pLamb :: Parser Expr
 pLamb =
   label "lambda" $
     string "\\" *> spaceConsumer *> do
-      args <- pIdentifier
+      arg <- pIdentifier
       spaceConsumer
       string "->"
       spaceConsumer
-      Lamb args <$> pExpr
+      Lamb arg <$> pExpr
 
 pInfixApp :: Parser Expr
 pInfixApp = label "infix application" $ do
@@ -97,11 +101,9 @@ operators =
     symbol "*" $> Mul,
     symbol "/" $> Div,
     symbol "==" $> Eq,
-    symbol "!=" $> Neq,
+    symbol "/=" $> Ne,
     symbol "<" $> Lt,
-    symbol ">" $> Gt,
-    symbol "<=" $> Le,
-    symbol ">=" $> Ge
+    symbol ">" $> Gt
   ]
 
 pApp :: Parser Expr
@@ -128,21 +130,21 @@ pAExpr = label "expression in parens or var/literal" $ choice [parens pExpr, pVa
 pStatement :: Parser Expr
 pStatement = pExpr <* semicolon
 
-parseFile :: String -> String -> Either String [Expr]
-parseFile input filename =
+parseFile :: String -> Text -> Either Text [Expr]
+parseFile filename input =
   let outputE =
         parse
           (between spaceConsumer eof (many pStatement))
           filename
           input
    in case outputE of
-        Left err -> Left $ errorBundlePretty err
+        Left err -> Left $ T.pack $ errorBundlePretty err
         Right output -> Right output
 
 test :: FilePath -> IO ()
 test fileName = do
   fileContent <- readFile fileName
-  let ast = parseFile fileContent fileName
+  let ast = parseFile fileName (T.pack fileContent)
   case ast of
-    Left err -> putStrLn err
+    Left err -> putStrLn (T.unpack err)
     Right ast' -> print ast'

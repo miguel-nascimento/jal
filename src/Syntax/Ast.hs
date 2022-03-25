@@ -2,7 +2,7 @@ module Syntax.Ast where
 
 import Data.Text (Text)
 
-type Identifier = String
+type Identifier = Text
 
 data Expr
   = Var Identifier
@@ -19,5 +19,5 @@ data Literal
   | LBool Bool
   deriving (Show)
 
-data Op = Add | Sub | Mul | Div | Eq | Neq | Lt | Gt | Le | Ge
+data Op = Add | Sub | Mul | Div | Eq | Ne | Lt | Gt
   deriving (Show)
