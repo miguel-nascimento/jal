@@ -2,7 +2,7 @@
 
 module Syntax.Parser where
 
-import Data.Functor (($>))
+import Data.Functor (($>), (<&>))
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Void (Void)
@@ -130,21 +130,7 @@ pAExpr = label "expression in parens or var/literal" $ choice [parens pExpr, pVa
 pStatement :: Parser Expr
 pStatement = pExpr <* semicolon
 
-parseFile :: String -> Text -> Either Text [Expr]
-parseFile filename input =
-  let outputE =
-        parse
-          (between spaceConsumer eof (many pStatement))
-          filename
-          input
-   in case outputE of
-        Left err -> Left $ T.pack $ errorBundlePretty err
-        Right output -> Right output
-
-test :: FilePath -> IO ()
-test fileName = do
-  fileContent <- readFile fileName
-  let ast = parseFile fileName (T.pack fileContent)
-  case ast of
-    Left err -> putStrLn (T.unpack err)
-    Right ast' -> print ast'
+parseFromFile :: FilePath -> IO (Either (ParseErrorBundle Text Void) [Expr])
+parseFromFile fileName =
+  runParser (between spaceConsumer eof (many pStatement)) fileName
+    <$> (readFile fileName <&> T.pack)

@@ -11,8 +11,5 @@ main = do
   case args of
     [] -> putStrLn "No argument given"
     (fileName : _) -> do
-      fileContent <- readFile fileName
-      let ast = parseFile fileName (T.pack fileContent)
-      case ast of
-        Left err -> putStrLn (T.unpack err)
-        Right ast' -> print ast'
+      parseFromFile fileName
+      pure ()
