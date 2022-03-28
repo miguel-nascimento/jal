@@ -26,7 +26,7 @@ parens :: Parser a -> Parser a
 parens = between (symbol "(") (symbol ")")
 
 semicolon :: Parser Text
-semicolon = symbol ";"
+semicolon = label "semicolon" $ symbol ";"
 
 pIdentifier :: Parser Text
 pIdentifier =
@@ -82,11 +82,11 @@ pLamb :: Parser Expr
 pLamb =
   label "lambda" $
     string "\\" *> spaceConsumer *> do
-      arg <- pIdentifier
+      param <- pIdentifier
       spaceConsumer
       string "->"
       spaceConsumer
-      Lamb arg <$> pExpr
+      Lamb param <$> pExpr
 
 pInfixApp :: Parser Expr
 pInfixApp = label "infix application" $ do
@@ -109,9 +109,9 @@ operators =
 pApp :: Parser Expr
 pApp =
   label "function application" $ do
-    expr1 <- pAExpr
+    fnExpr <- pAExpr
     args <- many pAExpr
-    pure $ foldl App expr1 args
+    pure $ foldl App fnExpr args
 
 pExpr :: Parser Expr
 pExpr =
@@ -132,5 +132,7 @@ pStatement = pExpr <* semicolon
 
 parseFromFile :: FilePath -> IO (Either (ParseErrorBundle Text Void) [Expr])
 parseFromFile fileName =
-  runParser (between spaceConsumer eof (many pStatement)) fileName
+  runParser
+    (between spaceConsumer eof (many pStatement))
+    fileName
     <$> (readFile fileName <&> T.pack)
